@@ -1,0 +1,7 @@
+PySide6>=6.5
+numpy>=1.24
+scipy>=1.10
+nibabel>=5.0
+Pillow>=9.0
+# 可选：nnU-Net 预标注（GPU 用户请先按 PyTorch 官网安装对应 CUDA 版本的 torch）
+# nnunetv2>=2.2

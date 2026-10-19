@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mlab"
+version = "0.1.0"
+description = "MLab：脑膜炎病灶标注工具，支持 nnU-Net 预标注"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "PySide6>=6.5",
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "nibabel>=5.0",
+    "Pillow>=9.0",
+]
+
+[project.optional-dependencies]
+nnunet = ["nnunetv2>=2.2"]
+dev = ["pytest>=7"]
+
+[project.scripts]
+mlab = "mlab.app:main"
+
+[tool.setuptools.packages.find]
+include = ["mlab*"]
+
+[tool.setuptools.package-data]
+mlab = ["resources/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
