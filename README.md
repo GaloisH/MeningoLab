@@ -20,7 +20,25 @@ MLab 是一个面向医生的桌面标注软件，用于在 MRI 三维影像（N
 | 输出 | 与原图同空间、同方向、同仿射矩阵的 `uint8` 掩膜：三维为 `labels/<病例>.nii.gz`，二维为 `labels/<病例>.png`，可直接作为 nnU-Net 训练标签 |
 | 界面 | 中文界面；深色 / 浅色主题一键切换；影像区始终为深色背景便于阅片 |
 
-## 安装
+## 安装（医生使用）
+
+从 Releases 页面下载与电脑匹配的安装包，双击安装即可，无需安装 Python：
+
+| 安装包 | 说明 |
+| --- | --- |
+| `MLab-<版本>-base-windows-x64-setup.exe` | 基础版：全部标注功能，不含 AI 预标注 |
+| `MLab-<版本>-ai-cpu-windows-x64-setup.exe` | AI 版：额外包含 PyTorch 与 nnU-Net，可在 CPU 上做预标注 |
+| `MLab-<版本>-base-macos-arm64.dmg` / `…-ai-macos-arm64.dmg` | macOS（Apple 芯片），AI 版可使用 MPS 加速 |
+
+- Windows 10/11 64 位；默认安装到当前用户，**无需管理员权限**。安装时可勾选桌面快捷方式和文件夹右键菜单「用 MLab 打开」。
+- 安装 AI 版会直接替换基础版（反之亦然），设置与模型列表会保留。
+- 安装包尚未做代码签名时：Windows 若提示“已保护你的电脑”，点「更多信息 → 仍要运行」；
+  macOS 首次打开请在「访达 → 应用程序」中右键 MLab →「打开」。
+- 运行日志位于 Windows `%LOCALAPPDATA%\MLab\logs`、macOS `~/Library/Logs/MLab`，反馈问题时请附上。
+
+> 本软件仅供科研与数据标注使用，不用于临床诊断。
+
+## 从源码安装（开发者）
 
 需要 Python ≥ 3.9。
 
@@ -112,7 +130,36 @@ pip install -e ".[dev]"
 pytest                    # 界面测试以离屏模式运行
 # 可选：用真实 nnU-Net 模型测试推理
 MLAB_TEST_NNUNET_MODEL=/path/to/nnUNetTrainer__nnUNetPlans__3d_fullres pytest tests/test_nnunet_integration.py
+# 没有真实模型时可生成一个随机权重的微型模型
+python scripts/make_dummy_nnunet_model.py /tmp/dummy_model
 ```
+
+## 打包发布
+
+打包脚本位于 `packaging/`，依次完成：生成图标 → PyInstaller 打包（目录模式）→ 用打包后的程序运行自检 → 制作安装程序。
+
+```bash
+pip install -e . pyinstaller
+python packaging/build.py                              # 基础版
+# AI 版：先在当前环境安装 torch 与 nnunetv2，打包的就是这个环境中的版本
+pip install torch --index-url https://download.pytorch.org/whl/cpu && pip install nnunetv2
+python packaging/build.py --edition ai                 # 得到 ai-cpu 版；环境中是 CUDA 版 torch 时得到 ai-gpu 版
+python packaging/build.py --edition ai --models 模型目录   # 同时把训练好的 nnU-Net 模型放进安装包
+```
+
+- 产物在 `dist/installer/`：Windows 为 Inno Setup 安装程序（需安装 [Inno Setup 6](https://jrsoftware.org/isdl.php)），
+  macOS 为 `.dmg`，Linux 为 `.tar.gz`。只需程序目录时加 `--no-installer`。
+- `--models` 指定的模型会放在程序目录的 `models/` 下，医生首次启动时自动出现在「AI 预标注」的模型列表中；
+  医生从列表中移除后不会再自动加回。
+- 打包后的程序支持 `MLab --self-test [--model 模型目录] [--report 结果文件]`：离屏打开合成病例、画一笔并保存，
+  AI 版还会检查 PyTorch / nnU-Net 并做一次真实推理。`build.py` 每次打包后都会运行它，失败则中止。
+- GPU 版体积约数 GB，超过 3 GB 时安装程序会自动拆分为 `setup.exe` + `.bin` 文件（需放在同一目录分发）。
+  GitHub Releases 单个文件上限为 2 GB，GPU 版建议在本地有 NVIDIA 显卡的 Windows 电脑上打包，通过网盘或 U 盘分发。
+- `scripts/make_dummy_nnunet_model.py` 可生成随机权重的微型 nnU-Net 模型，用于在没有真实模型时测试推理与安装包。
+
+GitHub Actions（`.github/workflows/build.yml`）会先运行测试，再在 Windows 与 macOS 上分别打包基础版和 AI 版（CPU），
+每个包都经过自检（AI 版使用微型模型实际推理）。推送 `v*` 标签（如 `git tag v0.1.0 && git push origin v0.1.0`）
+会自动创建一个包含全部安装包的 Release 草稿，确认后手动发布。发布新版本前请先修改 `mlab/__init__.py` 中的 `__version__`。
 
 代码结构：
 
@@ -122,6 +169,7 @@ mlab/
 │                  标注算法（tools）、渲染（render）、项目与病例（project）
 ├── inference/     nnU-Net v2 封装（模型解析、通道匹配、推理）
 └── ui/            PySide6 界面：主窗口、三视图、病例列表、侧边面板、主题与图标
+packaging/         安装包：PyInstaller 配置（mlab.spec）、Windows 安装程序脚本（installer.iss）、一键打包（build.py）
 ```
 
 ## 后续可扩展方向

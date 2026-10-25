@@ -15,7 +15,8 @@ from .. import APP_TITLE, __version__
 from ..core.project import STATUS_COLOR, STATUS_DONE, STATUS_PRE, STATUS_TEXT, STATUS_TODO, STATUS_WIP, Project
 from ..core.segmentation import LabelMap
 from ..core.volume import load_volumes
-from ..inference.nnunet import NnUNetRunner, match_channels
+from ..inference.nnunet import NnUNetRunner, find_model_folders, match_channels
+from ..runtime import bundled_model_root, edition_label, log_dir
 from . import icons
 from .case_panel import CasePanel
 from .controller import AnnotationController
@@ -57,7 +58,7 @@ class MainWindow(QMainWindow):
         self._build_actions()
         self._connect()
         self.apply_theme(self.theme.name)
-        self.model_panel.set_models(self.settings.value("models", [], type=list) or [])
+        self.model_panel.set_models(self._initial_models())
         if self.settings.value("geometry"):
             self.restoreGeometry(self.settings.value("geometry"))
         self._update_title()
@@ -614,10 +615,25 @@ class MainWindow(QMainWindow):
             pos = f"体素 ({voxel[0]}, {voxel[1]}, {voxel[2]})"
         self.hover_label.setText(f"{pos}   强度 {val:.1f}   标签 {lab_txt}")
 
+    def _initial_models(self) -> list[str]:
+        """已保存的模型列表，加上随安装包分发的模型（首次出现时自动加入）。"""
+        folders = self.settings.value("models", [], type=list) or []
+        root = bundled_model_root()
+        if root:
+            known = set(folders) | set(self.settings.value("bundled_models_seen", [], type=list) or [])
+            bundled = [str(f) for f in find_model_folders(root)]
+            folders += [f for f in bundled if f not in known]
+            self.settings.setValue("bundled_models_seen", sorted(known | set(bundled)))
+            self.settings.setValue("models", folders)
+        return folders
+
     def _about(self) -> None:
+        ed = edition_label()
         QMessageBox.about(self, "关于 MLab",
-                          f"<h3>MLab {__version__}</h3><p>脑膜炎病灶标注工具</p>"
-                          "<p>支持 NIfTI 三维 MRI 与二维图片标注、nnU-Net v2 预标注。</p>")
+                          f"<h3>MLab {__version__}{(' · ' + ed) if ed else ''}</h3><p>脑膜炎病灶标注工具</p>"
+                          "<p>支持 NIfTI 三维 MRI 与二维图片标注、nnU-Net v2 预标注。</p>"
+                          "<p><b>仅供科研与数据标注使用，不用于临床诊断。</b></p>"
+                          f"<p style='color:gray'>日志目录：{log_dir()}</p>")
 
     # ================================================================== 关闭
     def closeEvent(self, ev) -> None:

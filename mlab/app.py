@@ -7,6 +7,19 @@ from pathlib import Path
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv if argv is None else argv
+    from . import runtime
+
+    if "--self-test" in argv:
+        from .selftest import run
+
+        return run(argv)
+    if runtime.setup_frozen_logging():
+        from datetime import datetime
+
+        from . import __version__
+
+        print(f"===== {datetime.now():%Y-%m-%d %H:%M:%S} MLab {__version__} {runtime.edition()} 启动 =====")
+
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication
 

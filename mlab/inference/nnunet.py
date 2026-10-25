@@ -125,6 +125,10 @@ def match_channels(images: list[Path], channel_names: dict[int, str]) -> list[Pa
 
 
 def nnunet_status() -> tuple[bool, str]:
+    from ..runtime import edition
+
+    if edition() == "base":
+        return False, "当前为基础版，不含 AI 推理组件；如需预标注请安装 MLab AI 版"
     if importlib.util.find_spec("torch") is None:
         return False, "未安装 PyTorch，无法进行模型推理（pip install torch）"
     if importlib.util.find_spec("nnunetv2") is None:

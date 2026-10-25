@@ -69,20 +69,26 @@ def icon(name: str, color: str, size: int = 20) -> QIcon:
     return _cache[key]
 
 
-def app_icon() -> QIcon:
-    svg = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+APP_ICON_SVG = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
 <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4f9cff"/><stop offset="1" stop-color="#7b5cff"/></linearGradient></defs>
 <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#g)"/>
 <path d="M14 46V20l18 16 18-16v26" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
 <circle cx="47" cy="47" r="6" fill="#ff6347" stroke="#fff" stroke-width="2.5"/></svg>"""
-    renderer = QSvgRenderer(QByteArray(svg))
+
+
+def render_app_icon(size: int) -> QPixmap:
+    renderer = QSvgRenderer(QByteArray(APP_ICON_SVG))
+    pm = QPixmap(size, size)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing)
+    renderer.render(p, QRectF(0, 0, size, size))
+    p.end()
+    return pm
+
+
+def app_icon() -> QIcon:
     ic = QIcon()
     for s in (16, 32, 64, 128, 256):
-        pm = QPixmap(s, s)
-        pm.fill(Qt.transparent)
-        p = QPainter(pm)
-        p.setRenderHint(QPainter.Antialiasing)
-        renderer.render(p, QRectF(0, 0, s, s))
-        p.end()
-        ic.addPixmap(pm)
+        ic.addPixmap(render_app_icon(s))
     return ic

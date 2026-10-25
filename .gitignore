@@ -8,3 +8,4 @@ dist/
 venv/
 demo_data/
 *.log
+packaging/ChineseSimplified.isl

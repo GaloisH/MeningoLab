@@ -166,3 +166,32 @@ def test_modified_flag_after_save(win):
     win.ctrl.press(AXIAL, 20, 20)
     win.ctrl.release(AXIAL, 20, 20)
     assert win.windowTitle().endswith("*") and "未保存" in win.saved_label.text()
+
+
+def test_bundled_models_added_once(app, tmp_path, monkeypatch):
+    import json
+
+    from mlab.ui import main_window
+
+    m = tmp_path / "models" / "Dataset101_Men" / "nnUNetTrainer__nnUNetPlans__3d_fullres"
+    (m / "fold_0").mkdir(parents=True)
+    (m / "fold_0" / "checkpoint_final.pth").write_bytes(b"")
+    (m / "dataset.json").write_text(json.dumps({"channel_names": {"0": "T1C"}, "labels": {"background": 0, "a": 1},
+                                                "file_ending": ".nii.gz"}))
+    (m / "plans.json").write_text("{}")
+    monkeypatch.setattr(main_window, "bundled_model_root", lambda: tmp_path / "models")
+    settings = QSettings(str(tmp_path / "settings.ini"), QSettings.IniFormat)
+    w = MainWindow(settings)
+    assert [str(i.folder) for i in w.model_panel.infos] == [str(m)]
+    w.close()
+    # 医生从列表中移除后，下次启动不再自动加回
+    settings.setValue("models", [])
+    w = MainWindow(settings)
+    assert w.model_panel.infos == []
+    w.close()
+
+
+def test_self_test_from_source():
+    from mlab.selftest import run
+
+    assert run(["mlab", "--self-test"]) == 0
