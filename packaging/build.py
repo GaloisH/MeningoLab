@@ -26,6 +26,10 @@ PKG = ROOT / "packaging"
 BUILD = ROOT / "build"
 DIST = ROOT / "dist"
 sys.path.insert(0, str(ROOT))
+# Windows 控制台默认编码（如 cp1252）无法输出中文
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
 
 
 def log(msg: str) -> None:
