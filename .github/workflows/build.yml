@@ -3,6 +3,13 @@ name: 打包安装程序
 on:
   push:
     tags: ["v*"]
+    branches: ["claude/**"]
+    paths:
+      - "packaging/**"
+      - ".github/workflows/build.yml"
+      - "mlab/**"
+      - "scripts/make_dummy_nnunet_model.py"
+      - "pyproject.toml"
   workflow_dispatch:
   pull_request:
     paths:
@@ -28,13 +35,13 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: pytest -q
 
-  build:
+  # 基础版与 AI 版分成两个任务：Release 只依赖基础版，AI 版失败不会阻塞发布
+  build-base:
     needs: test
     strategy:
       fail-fast: false
       matrix:
         os: [windows-latest, macos-latest]
-        edition: [base, ai]
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -46,9 +53,36 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -e . pyinstaller
+      - name: 下载 Inno Setup 简体中文语言文件
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        run: curl -fsSL -o packaging/ChineseSimplified.isl https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/Unofficial/ChineseSimplified.isl
+      - name: 打包、自检并制作安装程序
+        run: python packaging/build.py --edition base
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MLab-${{ matrix.os }}-base
+          path: dist/installer/*
+          if-no-files-found: error
 
+  build-ai:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e . pyinstaller
       - name: 安装 PyTorch（CPU 版）与 nnU-Net
-        if: matrix.edition == 'ai'
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
             pip install torch --index-url https://download.pytorch.org/whl/cpu
@@ -57,37 +91,35 @@ jobs:
           fi
           pip install nnunetv2
       - name: 生成用于自检的微型 nnU-Net 模型
-        if: matrix.edition == 'ai'
         run: |
           MODEL=$(python scripts/make_dummy_nnunet_model.py "$RUNNER_TEMP/models" | tail -n 1)
-          echo "SELFTEST_ARGS=--selftest-model $MODEL" >> "$GITHUB_ENV"
-
+          echo "SELFTEST_MODEL=$MODEL" >> "$GITHUB_ENV"
       - name: 下载 Inno Setup 简体中文语言文件
         if: runner.os == 'Windows'
         continue-on-error: true
         run: curl -fsSL -o packaging/ChineseSimplified.isl https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/Unofficial/ChineseSimplified.isl
-
       - name: 打包、自检并制作安装程序
-        run: python packaging/build.py --edition ${{ matrix.edition }} $SELFTEST_ARGS
-
+        run: python packaging/build.py --edition ai --selftest-model "$SELFTEST_MODEL"
       - uses: actions/upload-artifact@v4
         with:
-          name: MLab-${{ matrix.os }}-${{ matrix.edition }}
+          name: MLab-${{ matrix.os }}-ai
           path: dist/installer/*
           if-no-files-found: error
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: build-base
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
+          pattern: MLab-*-base
           path: dist
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
-          draft: true
+          body_path: packaging/release_notes.md
           files: dist/*
